@@ -1,0 +1,65 @@
+# ==============================================================================
+# 04. INGRESS RULES & KONG PLUGINS
+# ==============================================================================
+# BEST PRACTICE:
+# Daripada menulis routing secara hardcode di API Gateway, kita mendefinisikannya
+# secara dinamis menggunakan K8s Ingress. Kong Ingress Controller akan otomatis
+# membaca dan menerapkannya.
+# ==============================================================================
+
+---
+# 1. Definisi Plugin Keamanan (API Key)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: transfer-apikey-auth
+config:
+  key_names:
+    - apikey
+  hide_credentials: true
+plugin: key-auth
+
+---
+# 2. Akun Nasabah (Consumer)
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: internal-channel-mobile
+  annotations:
+    kubernetes.io/ingress.class: kong
+username: internal-channel-mobile
+credentials:
+  - internal-channel-mobile-apikey
+
+---
+# 3. Kunci Rahasia untuk Akun Nasabah
+apiVersion: v1
+kind: Secret
+metadata:
+  name: internal-channel-mobile-apikey
+type: Opaque
+stringData:
+  kongCredType: key-auth
+  key: "super-secret-api-key-123"
+
+---
+# 4. Aturan Rute (Pintu Masuk)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: transfer-service-ingress
+  annotations:
+    kubernetes.io/ingress.class: kong
+    # Menyuntikkan plugin keamanan (API Key) ke dalam rute ini
+    konghq.com/plugins: transfer-apikey-auth
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/v1/transfer
+            pathType: Prefix
+            backend:
+              service:
+                name: transfer-service
+                port:
+                  number: 8080
