@@ -1,0 +1,12 @@
+server:
+  grpc_port: 50051
+  http_port: 8080
+
+database:
+  url: "postgres://adapter_user:rahasia123@localhost:5432/adapter_db?sslmode=disable"
+
+vendor:
+  biller_url: "https://api.sandbox.vendor.com/v1/payment"
+  auth_url: "https://api.sandbox.vendor.com/v1/auth"
+  client_id: "bank-client-123"
+  client_secret: "super-secret-key"

@@ -1,0 +1,148 @@
+# ==============================================================================
+# 01. DATABASE TIER
+# ==============================================================================
+# BEST PRACTICE: 
+# Untuk arsitektur Microservices, setiap service idealnya memiliki database terpisah.
+# Di sini kita mendefinisikan PVC (agar data tidak hilang saat pod restart) dan 
+# Deployment dengan strategi "Recreate" (mencegah bentrok akses file PVC antar replika).
+# Kita menggunakan Deployment bukan StatefulSet agar tidak "over-engineer" untuk lingkungan dev/staging.
+# ==============================================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: account-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account-db
+  labels:
+    app: account-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Mencegah pod baru naik sebelum pod lama mati (wajib untuk PVC ReadWriteOnce)
+  selector:
+    matchLabels:
+      app: account-db
+  template:
+    metadata:
+      labels:
+        app: account-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: account_db
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: account-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: account-db
+spec:
+  type: ClusterIP # Hanya bisa diakses dari dalam cluster
+  selector:
+    app: account-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+# ==============================================================================
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: transfer-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transfer-db
+  labels:
+    app: transfer-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: transfer-db
+  template:
+    metadata:
+      labels:
+        app: transfer-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: transfer_db
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: transfer-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transfer-db
+spec:
+  type: ClusterIP
+  selector:
+    app: transfer-db
+  ports:
+    - port: 5432
+      targetPort: 5432

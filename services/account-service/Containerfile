@@ -1,0 +1,40 @@
+# Stage 1: Build Phase
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependency files from root
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy standard proto, pkg, and service files
+COPY pb/ ./pb/
+COPY pkg/ ./pkg/
+COPY services/account-service/ ./services/account-service/
+
+# Compile stripped production binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/bin/account-service ./services/account-service
+
+# Stage 2: Minimal Production Runtime
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -g 10001 -S appgroup \
+    && adduser -u 10001 -S appuser -G appgroup \
+    && mkdir -p /var/log/banking \
+    && chown -R appuser:appgroup /var/log/banking
+
+WORKDIR /app
+
+COPY --from=builder /app/bin/account-service /app/account-service
+
+# Run as Non-Root User (OJK/PCI-DSS Compliance)
+USER 10001:10001
+
+ENV PORT=8083
+ENV LOG_FILE_PATH=/var/log/banking/account-service.log
+
+EXPOSE 8083
+EXPOSE 9001
+
+ENTRYPOINT ["/app/account-service"]

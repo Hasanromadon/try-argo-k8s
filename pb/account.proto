@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "banking-microservices/pb";
+
+// Service untuk mengelola saldo dan rekening nasabah
+service AccountService {
+  // Mendapatkan saldo rekening saat ini
+  rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
+
+  // Mengurangi saldo rekening (Debit)
+  rpc Debit (DebitRequest) returns (DebitResponse);
+
+  // Menambah saldo rekening (Kredit)
+  rpc Credit (CreditRequest) returns (CreditResponse);
+}
+
+message GetBalanceRequest {
+  string account_number = 1;
+}
+
+message GetBalanceResponse {
+  string account_number = 1;
+  int64 balance = 2; // Saldo dalam satuan Terendah (misal: Sen / Rupiah Utuh)
+  string currency = 3;
+}
+
+message DebitRequest {
+  string account_number = 1;
+  int64 amount = 2; // Nominal yang didebit (harus positif)
+  string transaction_id = 3;
+  string description = 4;
+}
+
+message DebitResponse {
+  string account_number = 1;
+  int64 new_balance = 2;
+  bool success = 3;
+  string message = 4;
+}
+
+message CreditRequest {
+  string account_number = 1;
+  int64 amount = 2; // Nominal yang dikredit (harus positif)
+  string transaction_id = 3;
+  string description = 4;
+}
+
+message CreditResponse {
+  string account_number = 1;
+  int64 new_balance = 2;
+  bool success = 3;
+  string message = 4;
+}
+
+// Service untuk mengelola transaksi transfer dana
+service TransferService {
+  rpc Transfer (TransferRequest) returns (TransferResponse);
+}
+
+message TransferRequest {
+  string source_account = 1;
+  string target_account = 2;
+  int64 amount = 3;
+  string currency = 4;
+}
+
+message TransferResponse {
+  string transaction_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+

@@ -1,0 +1,118 @@
+# ==============================================================================
+# 03. API GATEWAY TIER
+# ==============================================================================
+# BEST PRACTICE:
+# Kong dijalankan dalam mode "DB-less" menggunakan konfigurasi deklaratif (kong.yml).
+# Konfigurasi ini kita simpan ke dalam K8s ConfigMap dan di-mount ke dalam Pod Kong.
+# Kong Service menggunakan tipe NodePort (atau LoadBalancer di Cloud) agar bisa 
+# diakses dari luar cluster (oleh Mobile App / Postman).
+# ==============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-declarative-config
+data:
+  # Konfigurasi ini adalah versi Kubernetes dari kong.yml asli kita
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: account-service
+        url: http://account-service:8083 # Mengarah ke K8s DNS untuk Account Service (Port gRPC)
+        # Note: Kong natively proxies HTTP. Jika ingin proxy gRPC, butuh ingress khusus atau 
+        # Kong gRPC proxy. Di PoC ini, Kong menembak HTTP port jika ada.
+        # Mari kita asumsikan Kong menembak HTTP port dari Account Service (jika ada).
+        
+      - name: transfer-service
+        url: http://transfer-service:8080 # Mengarah ke K8s DNS HTTP Port dari Transfer Service
+        routes:
+          - name: transfer-route
+            paths:
+              - /api/v1/transfer
+            strip_path: false
+            plugins:
+              - name: key-auth
+                config:
+                  key_names:
+                    - apikey
+                  hide_credentials: true
+
+    consumers:
+      - username: internal-channel-mobile
+
+    keyauth_credentials:
+      - consumer: internal-channel-mobile
+        key: "super-secret-api-key-123"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-gateway
+  labels:
+    app: kong-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kong-gateway
+  template:
+    metadata:
+      labels:
+        app: kong-gateway
+    spec:
+      containers:
+        - name: kong
+          image: kong:latest
+          ports:
+            - containerPort: 8000
+              name: proxy
+            - containerPort: 8001
+              name: admin
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: "/usr/local/kong/declarative/kong.yml"
+            - name: KONG_PROXY_LISTEN
+              value: "0.0.0.0:8000"
+            - name: KONG_ADMIN_LISTEN
+              value: "0.0.0.0:8001"
+            - name: KONG_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: kong-config
+              mountPath: /usr/local/kong/declarative
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: kong-config
+          configMap:
+            name: kong-declarative-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-gateway
+spec:
+  type: NodePort # Membuka akses publik ke Gateway
+  selector:
+    app: kong-gateway
+  ports:
+    - name: proxy
+      port: 8080
+      targetPort: 8000
+      nodePort: 30080 # Bisa diakses dari luar cluster menggunakan http://<node-ip>:30080
+    - name: admin
+      port: 8001
+      targetPort: 8001

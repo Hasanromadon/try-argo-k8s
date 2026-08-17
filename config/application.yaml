@@ -1,0 +1,4 @@
+app:
+  maintenance_mode: true
+  transfer_timeout_ms: 5000
+  log_level: "INFO"

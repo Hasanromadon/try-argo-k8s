@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # 1. Database untuk Account Service
+  account-db:
+    image: postgres:15-alpine
+    container_name: bank-account-db
+    ports:
+      - "5431:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=account_db
+    volumes:
+      - account-db-data:/var/lib/postgresql/data
+    restart: always
+
+  # 2. Database untuk Transfer Service
+  transfer-db:
+    image: postgres:15-alpine
+    container_name: bank-transfer-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=transfer_db
+    volumes:
+      - transfer-db-data:/var/lib/postgresql/data
+    restart: always
+
+
+  # 3b. Kong API Gateway (Public Boundary Gateway - Port 8080)
+  kong-gateway:
+    image: kong:latest
+    container_name: bank-kong-gateway
+    ports:
+      - "8080:8000" # Expose Kong proxy on port 8080
+      - "8001:8001" # Expose Kong Admin API
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/usr/local/kong/declarative/kong.yml
+      - KONG_PROXY_LISTEN=0.0.0.0:8000
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_LOG_LEVEL=info
+    volumes:
+      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
+    depends_on:
+      - account-service
+      - transfer-service
+    restart: always
+
+  # 4. Account Service (gRPC Port 8083)
+  account-service:
+    build:
+      context: ../
+      dockerfile: services/account-service/Containerfile
+    container_name: bank-account-service
+    ports:
+      - "8083:8083"
+    volumes:
+      - shared-logs:/var/log/banking
+      - ../config:/etc/banking/config:ro
+    environment:
+      - PORT=8083
+      - LOG_FILE_PATH=/var/log/banking/account-service.log
+      - DB_HOST=account-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=account_db
+    depends_on:
+      - account-db
+    restart: always
+
+  # 5. Transfer Service (gRPC Port 8082)
+  transfer-service:
+    build:
+      context: ../
+      dockerfile: services/transfer-service/Containerfile
+    container_name: bank-transfer-service
+    ports:
+      - "8082:8082"
+    volumes:
+      - shared-logs:/var/log/banking
+      - ../config:/etc/banking/config:ro
+    environment:
+      - PORT=8082
+      - LOG_FILE_PATH=/var/log/banking/transfer-service.log
+      - DB_HOST=transfer-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=transfer_db
+      - ACCOUNT_SERVICE_ADDR=account-service:8083
+      - VENDOR_ADAPTER_ADDR=third-party-adapter:8084
+      - JAVA_MQ_ADAPTER_URL=http://localhost:8085/api/mq/publish
+    depends_on:
+      - transfer-db
+      - account-service
+      - third-party-adapter
+    restart: always
+
+  # 6. Third-Party Adapter (gRPC Port 8084)
+  third-party-adapter:
+    build:
+      context: ../
+      dockerfile: services/third-party-adapter/Containerfile
+    container_name: bank-third-party-adapter
+    ports:
+      - "8084:8084"
+    environment:
+      - GRPC_PORT=8084
+      - HTTP_PORT=8081
+    restart: always
+
+volumes:
+  account-db-data:
+  transfer-db-data:
+  shared-logs:

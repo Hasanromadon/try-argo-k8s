@@ -1,0 +1,6 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane   # Server 1: Sang Master Node (Manajer)
+- role: worker          # Server 2: Worker Node Pertama
+- role: worker          # Server 3: Worker Node Kedua

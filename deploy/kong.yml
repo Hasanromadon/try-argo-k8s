@@ -1,0 +1,42 @@
+_format_version: "3.0"
+
+services:
+  - name: account-service
+    url: http://account-service:8080
+    routes:
+      - name: balance-route
+        paths:
+          - /api/v1/accounts
+        strip_path: false
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+                - X-API-Key
+
+  - name: transfer-service
+    url: http://transfer-service:8080
+    routes:
+      - name: transfer-route
+        paths:
+          - /api/v1/transfer
+        strip_path: false
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              hide_credentials: true
+
+consumers:
+  - username: internal-channel-mobile
+
+keyauth_credentials:
+  - consumer: internal-channel-mobile
+    key: "api-key-internal-mobile-001"
+
+hmacauth_credentials:
+  - consumer: internal-channel-mobile
+    username: "mobile-app-client"
+    secret: "super-secret-hmac-key-shared-with-mobile-be"

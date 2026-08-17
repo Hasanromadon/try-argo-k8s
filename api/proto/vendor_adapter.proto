@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package banking.adapter.v1;
+
+// Direktori tujuan saat di-compile ke Golang
+option go_package = "banking-microservices/pkg/pb;pb";
+
+// ==============================================================================
+// LAYANAN ADAPTER VENDOR
+// ==============================================================================
+service VendorAdapterService {
+  // Mengeksekusi transfer dari Core/Transfer Service ke Vendor Biller Eksternal
+  rpc ExecuteTransfer(TransferRequest) returns (TransferResponse);
+
+  // Mengecek status transaksi yang menggantung (Pending) di pihak Vendor
+  rpc CheckStatus(StatusRequest) returns (StatusResponse);
+}
+
+// ==============================================================================
+// PESAN (MESSAGES)
+// ==============================================================================
+
+// Request untuk melakukan transfer
+message TransferRequest {
+  string transaction_id = 1; // ID Transaksi unik dari Transfer Service (Correlation ID)
+  string source_account = 2; // Rekening pengirim
+  string target_account = 3; // Rekening tujuan di bank/vendor lain
+  double amount = 4;         // Nominal transfer
+  string bank_code = 5;      // Kode bank/biller tujuan (opsional jika sudah fix)
+  string narration = 6;      // Catatan / Berita transfer
+}
+
+// Response hasil eksekusi transfer dari Vendor
+message TransferResponse {
+  string transaction_id = 1;
+  TransferStatus status = 2;
+  string vendor_reference_id = 3; // Nomor referensi asli dari sistem Vendor (jika berhasil)
+  string error_code = 4;          // Kode error spesifik jika gagal (di-mapping dari vendor)
+  string error_message = 5;       // Pesan error dari vendor
+}
+
+// Request untuk mengecek status transaksi (Inquiry)
+message StatusRequest {
+  string transaction_id = 1;      // ID Transaksi internal kita
+  string vendor_reference_id = 2; // (Opsional) Referensi vendor jika kita menyimpannya
+}
+
+// Response hasil cek status
+message StatusResponse {
+  string transaction_id = 1;
+  TransferStatus status = 2;
+  string vendor_reference_id = 3;
+}
+
+// ==============================================================================
+// ENUMERASI
+// ==============================================================================
+
+// Status baku (Normalized Status) agar Transfer Service tidak perlu tahu bahasa Vendor
+enum TransferStatus {
+  UNKNOWN = 0;
+  PENDING = 1; // Transaksi sedang diproses, tunggu Webhook atau lakukan Inquiry
+  SUCCESS = 2; // Uang berhasil pindah
+  FAILED = 3;  // Transaksi gagal, uang harus dikembalikan (Saga Rollback)
+}

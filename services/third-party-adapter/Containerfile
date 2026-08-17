@@ -1,0 +1,21 @@
+# Build stage
+FROM docker.io/library/golang:1.25.0-alpine AS builder
+
+WORKDIR /app
+
+# Copy the entire project context to allow referencing root go.mod and pkg/pb
+COPY . .
+
+# Move to the service directory and build
+WORKDIR /app/services/third-party-adapter
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/third-party-adapter .
+
+# Final stage
+FROM docker.io/library/alpine:3.18
+WORKDIR /root/
+COPY --from=builder /app/third-party-adapter .
+
+EXPOSE 8084 8081
+
+CMD ["./third-party-adapter"]
