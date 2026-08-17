@@ -10,7 +10,7 @@ spec:
   source:
     # URL repositori Git tempat file manifest Kubernetes Anda disimpan.
     # Jika menggunakan GitLab Private, Anda perlu mendaftarkan kredensial di ArgoCD terlebih dahulu.
-    repoURL: 'https://github.com/Hasanromadon/microservice-learn.git' # GANTI DENGAN URL REPOSITORY ANDA
+    repoURL: 'https://github.com/Hasanromadon/try-argo-k8s.git' # GANTI DENGAN URL REPOSITORY ANDA
     targetRevision: HEAD
     
     # Path/folder di dalam repository tempat ArgoCD akan mencari file .yml
