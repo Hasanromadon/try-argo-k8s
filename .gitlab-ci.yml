@@ -1,0 +1,71 @@
+# ==============================================================================
+# CORE BANKING CI PIPELINE (GitLab Enterprise)
+# ==============================================================================
+# Pipeline ini dirancang untuk berjalan di lingkungan Air-Gapped (On-Premise).
+# Runner menggunakan image Docker minimalis yang ditarik dari Private Registry.
+
+stages:
+  - test
+  - build
+  - push
+
+variables:
+  # Konfigurasi registry internal bank
+  REGISTRY_URL: "registry.internal.bank.local:5000"
+  GOPROXY: "http://nexus.internal.bank.local/repository/go-proxy/"
+  DOCKER_DRIVER: overlay2
+
+# ------------------------------------------------------------------------------
+# STAGE 1: TESTING & LINTING
+# Memastikan kode aman dan tidak ada celah keamanan.
+# ------------------------------------------------------------------------------
+test-and-lint:
+  stage: test
+  image: golang:1.23-alpine
+  script:
+    - echo "Menjalankan Golang Unit Tests..."
+    - go test ./... -v
+    - echo "Menjalankan Static Analysis (Go Vet)..."
+    - go vet ./...
+  only:
+    - merge_requests
+    - main
+
+# ------------------------------------------------------------------------------
+# STAGE 2: BUILD DOCKER IMAGES
+# Mengemas Microservices menjadi Container Images.
+# ------------------------------------------------------------------------------
+build-images:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - echo "Membangun Account Service..."
+    - docker build -t $REGISTRY_URL/account-service:$CI_COMMIT_SHORT_SHA -f services/account-service/Containerfile .
+    
+    - echo "Membangun Transfer Service..."
+    - docker build -t $REGISTRY_URL/transfer-service:$CI_COMMIT_SHORT_SHA -f services/transfer-service/Containerfile .
+
+    - echo "Membangun Adapter..."
+    - docker build -t $REGISTRY_URL/third-party-adapter:$CI_COMMIT_SHORT_SHA -f services/third-party-adapter/Containerfile .
+  only:
+    - main
+
+# ------------------------------------------------------------------------------
+# STAGE 3: PUSH KE PRIVATE REGISTRY
+# Menyimpan Image ke brankas rahasia perusahaan agar bisa ditarik oleh K8s.
+# ------------------------------------------------------------------------------
+push-images:
+  stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - echo "Mengotentikasi ke Private Registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $REGISTRY_URL
+    - docker push $REGISTRY_URL/account-service:$CI_COMMIT_SHORT_SHA
+    - docker push $REGISTRY_URL/transfer-service:$CI_COMMIT_SHORT_SHA
+    - docker push $REGISTRY_URL/third-party-adapter:$CI_COMMIT_SHORT_SHA
+  only:
+    - main

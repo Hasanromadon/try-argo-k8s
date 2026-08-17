@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: core-banking-microservices
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # URL repositori Git tempat file manifest Kubernetes Anda disimpan.
+    # Jika menggunakan GitLab Private, Anda perlu mendaftarkan kredensial di ArgoCD terlebih dahulu.
+    repoURL: 'https://github.com/Hasanromadon/microservice-learn.git' # GANTI DENGAN URL REPOSITORY ANDA
+    targetRevision: HEAD
+    
+    # Path/folder di dalam repository tempat ArgoCD akan mencari file .yml
+    path: deploy/k8s
+  
+  destination:
+    # Server tujuan, https://kubernetes.default.svc berarti cluster lokal tempat ArgoCD berjalan
+    server: 'https://kubernetes.default.svc'
+    namespace: default # Namespace target untuk aplikasi banking Anda
+
+  # Kebijakan sinkronisasi (GitOps)
+  syncPolicy:
+    automated:
+      prune: true     # Otomatis menghapus pod/service jika file yml-nya dihapus dari Git
+      selfHeal: true  # Otomatis mengembalikan perubahan jika ada orang yang mengedit pod manual via kubectl (Anti-Tampering)
+    syncOptions:
+      - CreateNamespace=true
