@@ -1,0 +1,28 @@
+# ==============================================================================
+# 06. HORIZONTAL POD AUTOSCALER (HPA)
+# ==============================================================================
+# BEST PRACTICE:
+# HPA bertugas mengawasi penggunaan CPU dan Memory dari setiap Pod.
+# Jika beban melampaui batas (targetCPUUtilizationPercentage), HPA akan 
+# secara otomatis menambahkan Pod baru (hingga maxReplicas) untuk membagi beban.
+# Saat beban turun, HPA akan mematikan Pod ekstra tersebut secara perlahan.
+# ==============================================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: transfer-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: transfer-service
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
